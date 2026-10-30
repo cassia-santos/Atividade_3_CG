@@ -1,17 +1,25 @@
 """
-Enter: inicia o jogo
-Espaço: dispara
-Setas para cima e para baixo movimentam a nave
-Tecla P pausa o jogo
+Execute: python main.py
+Enter inicia o jogo; 
+Espaço efetua os disparos;
+Setas para cima/baixo alteram a posição vertical da nave;
+P pausa/retoma o jogo
+V liga/desliga o vsync
+ESC sai
 
-OBS.: O código possui trechos baseados em 07_triangulo_animado.py, 06_senhor_coracao.py
-e 05u_quadrado_uniform.py
+
+OBS.: A geometria do retângulo é baseada no código 05u_quadrado_uniform.py
+disponibilizado pelo docente. Assim, adaptou-se as coordenadas a fim de formar
+as barras de pausa, enquanto o ebo foi aplicado para o reaproveitamento de vértices
+As funções utilizadas para construir a geometria do círculo (leque(x,y) e curva_circulo())
+foram extraídas de 06_senhor_coracao.py
+Utilizou-se como base o código 07_triangulo_animado.py para implementar a exibição
+e ativação/ desativação do vsync
 """
 
+# Importando as bibliotecas
 import sys
 from pathlib import Path
-
-# Importando as bibliotecas
 import glfw
 import moderngl
 import numpy as np
@@ -22,10 +30,10 @@ from GerenciaAsteroides import GerenciaAsteroides
 
 SHADERS = Path(__file__).parent / "shaders"
 
-LADO = 800  # janela quadrada: ver a nota sobre proporcao
+LADO = 800  # janela quadrada
 
-#Limites
-DT_MAXIMO = 0.05  # trava de seguranca: ver a nota sobre o passo grande
+# Tempo máximo
+DT_MAXIMO = 0.05  # trava de seguranca
 
 #Escalas
 ESCALA_PLAY = (0.4, 0.8)
@@ -39,6 +47,7 @@ FUNDO = (0.04, 0.05, 0.09, 1.0)
 CINZA = (0.7, 0.7, 0.7, 1.0)
 CINZA_ASTEROIDE = (0.5, 0.5, 0.5, 1.0)
 AZUL = (0.15, 0.55, 0.95, 1.0)
+
 
 # ------ Geometrias ------
 
@@ -63,6 +72,7 @@ vertices_asa_inferior = np.array([
      0.32, -0.09, 0.0, 1.0,
 ], dtype = 'f4')
 
+# Geometria do retângulo
 vertices_retangulo = np.array([
         -0.5, -0.5, 0.0, 1.0,
          0.5, -0.5, 0.0, 1.0,
@@ -73,10 +83,6 @@ vertices_retangulo = np.array([
 indices_retangulo = np.array([0, 1, 2, 2, 3, 0], dtype='u4')
 
 
-"""
-OBS.: as funções leque(x,y) e curva_circulo() foram extraídas de
-06_senhor_coracao.py
-"""
 def leque(x, y):
     """Empacota uma curva fechada como TRIANGLE_FAN: primeiro o centro, depois
     a curva, e o primeiro ponto repetido no fim para fechar a volta."""
@@ -116,56 +122,13 @@ if not janela:
     sys.exit("FALHA: nao foi possivel criar a janela")
 
 glfw.make_context_current(janela)
-glfw.swap_interval(1)  # espera o retraco vertical: ver a nota sobre vsync
+glfw.swap_interval(1)  # espera o retraco vertical
 ctx = moderngl.create_context()
 
 prog = ctx.program(
     vertex_shader=(SHADERS / "acerte_o_alvo.vert").read_text(encoding="utf-8"),
     fragment_shader=(SHADERS / "basico.frag").read_text(encoding="utf-8"),
 )
-
-
-def desenhar(vao, escala, deslocamento, cor, modo=moderngl.TRIANGLES):
-    prog["u_escala"].value = escala
-    prog["u_deslocamento"].value = deslocamento
-    prog["u_cor"].value = cor
-    vao.render(modo)
-
-# Instanciando a nave com as coordenadas iniciais 
-# e o gerenciador com a quantidade de asteroides
-nave = Nave(-0.8, 0.0)
-gerenciador_asteroides = GerenciaAsteroides(10)
-
-# Chamada do método adicionar_asteroides() pertencente a classe GerenciaAsteroides
-# O método instancia a quantidade de asteroides definida anteriormente e adiciona a lista 
-gerenciador_asteroides.adicionar_asteroides()
-
-# Definindo os vertices do asteroide por meio da função curva_circulo()
-vertices_asteroide = curva_circulo()
-
-ebo_retangulo = ctx.buffer(indices_retangulo.tobytes())
-
-vbo_corpo = ctx.buffer(vertices_corpo.tobytes())
-vbo_asa_superior = ctx.buffer(vertices_asa_superior.tobytes())
-vbo_asa_inferior = ctx.buffer(vertices_asa_inferior.tobytes())
-vbo_circulo = ctx.buffer(vertices_asteroide.tobytes())
-vbo_retangulo = ctx.buffer(vertices_retangulo.tobytes())
-
-vao_corpo = ctx.vertex_array(prog, [(vbo_corpo, '4f', 'vPosition')])
-vao_asa_superior = ctx.vertex_array(prog, [(vbo_asa_superior, '4f', 'vPosition')])
-vao_asa_inferior = ctx.vertex_array(prog, [(vbo_asa_inferior, '4f', 'vPosition')])
-vao_circulo = ctx.vertex_array(prog, [(vbo_circulo, '4f', 'vPosition')])
-vao_retangulo = ctx.vertex_array(prog, [(vbo_retangulo, '4f', 'vPosition')], index_buffer=ebo_retangulo)
-
-
-# Definindo os estados do jogo
-inicio = 0
-jogo_em_andamento = 1
-jogo_pausado = 2
-
-estado_atual = inicio
-
-vsync = True
 
 def tecla(window, key, scancode, action, mods):
     global vsync, estado_atual
@@ -195,8 +158,55 @@ def tecla(window, key, scancode, action, mods):
 
 glfw.set_key_callback(janela, tecla)
 
+def desenhar(vao, escala, deslocamento, cor, modo=moderngl.TRIANGLES):
+    prog["u_escala"].value = escala
+    prog["u_deslocamento"].value = deslocamento
+    prog["u_cor"].value = cor
+    vao.render(modo)
+
+# Instanciando a nave com as coordenadas iniciais e o gerenciador com a quantidade de asteroides
+nave = Nave(-0.8, 0.0)
+gerenciador_asteroides = GerenciaAsteroides(10)
+
+# Chamada do método adicionar_asteroides() pertencente a classe GerenciaAsteroides
+# O método instancia a quantidade de asteroides definida anteriormente e adiciona a lista 
+gerenciador_asteroides.adicionar_asteroides()
+
+# Definindo os vertices do asteroide por meio da função curva_circulo()
+vertices_asteroide = curva_circulo()
+
+# ------ Criação dos buffers ------
+
+ebo_retangulo = ctx.buffer(indices_retangulo.tobytes())
+
+vbo_corpo = ctx.buffer(vertices_corpo.tobytes())
+vbo_asa_superior = ctx.buffer(vertices_asa_superior.tobytes())
+vbo_asa_inferior = ctx.buffer(vertices_asa_inferior.tobytes())
+vbo_circulo = ctx.buffer(vertices_asteroide.tobytes())
+vbo_retangulo = ctx.buffer(vertices_retangulo.tobytes())
+
+vao_corpo = ctx.vertex_array(prog, [(vbo_corpo, '4f', 'vPosition')])
+vao_asa_superior = ctx.vertex_array(prog, [(vbo_asa_superior, '4f', 'vPosition')])
+vao_asa_inferior = ctx.vertex_array(prog, [(vbo_asa_inferior, '4f', 'vPosition')])
+vao_circulo = ctx.vertex_array(prog, [(vbo_circulo, '4f', 'vPosition')])
+vao_retangulo = ctx.vertex_array(prog, [(vbo_retangulo, '4f', 'vPosition')], index_buffer=ebo_retangulo)
+
+
+# Definindo os estados do jogo
+inicio = 0
+jogo_em_andamento = 1
+jogo_pausado = 2
+
+estado_atual = inicio
+
+vsync = True
+
+
 instante_anterior = glfw.get_time()
 quadros, marco = 0, instante_anterior
+
+
+# ------ Laço principal ------
 
 while not glfw.window_should_close(janela):
     agora = glfw.get_time()
@@ -208,6 +218,7 @@ while not glfw.window_should_close(janela):
     ctx.clear(*FUNDO)
 
     # Atualização das posições
+    # As posições são atualizadas somente se o jogo estiver em andamento
     if estado_atual == jogo_em_andamento:
         # --- atualizacao: tudo multiplicado por dt, nada por quadro ---
         # Movimento continuo: consulta direta do estado das teclas.
@@ -221,7 +232,7 @@ while not glfw.window_should_close(janela):
         for disparo in nave.disparos:
             disparo.atualizar_posicao(dt)
     
-    # Desenhos
+    # Renderização
     if estado_atual == inicio:
         desenhar(vao_corpo, ESCALA_PLAY, (0.0, 0.0), CINZA)
     
@@ -251,7 +262,7 @@ while not glfw.window_should_close(janela):
     quadros += 1
     if agora - marco >= 0.5:
         glfw.set_window_title(
-            janela, f"Acerte o alvo -  acertos - "
+            janela, f"Acerte o alvo - (colocar a qtd aqui) acertos - "
                     f"vsync {'on' if vsync else 'OFF'} - "
                     f"{quadros / (agora - marco):5.1f} fps")
         quadros, marco = 0, agora
@@ -261,4 +272,4 @@ for recurso in (vao_corpo, vao_asa_superior, vao_asa_inferior, vao_circulo, vao_
                 vbo_corpo, vbo_asa_superior, vbo_asa_inferior, vbo_circulo, vbo_retangulo, ebo_retangulo, prog):
     recurso.release()
 glfw.terminate()
-print("Execucao finalizada")
+print("Execucao finalizada. Acertos: (colocar a qtd aqui)")
