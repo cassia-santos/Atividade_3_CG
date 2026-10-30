@@ -1,5 +1,11 @@
 """
-OBS.: O código possui trechos baseados em 07_triangulo_animado.py e 06_senhor_coracao.py
+Enter: inicia o jogo
+Espaço: dispara
+Setas para cima e para baixo movimentam a nave
+Tecla P pausa o jogo
+
+OBS.: O código possui trechos baseados em 07_triangulo_animado.py, 06_senhor_coracao.py
+e 05u_quadrado_uniform.py
 """
 
 import sys
@@ -10,7 +16,7 @@ import glfw
 import moderngl
 import numpy as np
 
-# Importando as classes necessárias para esse código
+# Importando as classes necessárias para esse código principal
 from Nave import Nave
 from GerenciaAsteroides import GerenciaAsteroides
 
@@ -22,14 +28,49 @@ LADO = 800  # janela quadrada: ver a nota sobre proporcao
 DT_MAXIMO = 0.05  # trava de seguranca: ver a nota sobre o passo grande
 
 #Escalas
+ESCALA_PLAY = (0.4, 0.8)
+ESCALA_BARRA = (0.04, 0.25)
 ESCALA_NAVE = (0.35, 0.45)
 ESCALA_ASTEROIDE = (0.08, 0.08)
 ESCALA_DISPARO = (0.01, 0.01)
 
 # Cores
 FUNDO = (0.04, 0.05, 0.09, 1.0)
-CINZA = (0.55, 0.58, 0.62, 1.0)
+CINZA = (0.7, 0.7, 0.7, 1.0)
+CINZA_ASTEROIDE = (0.5, 0.5, 0.5, 1.0)
 AZUL = (0.15, 0.55, 0.95, 1.0)
+
+# ------ Geometrias ------
+
+# Geometria da nave
+# Os vértices do corpo da nave também são utilizados para criar o símbolo de 
+# play da tela inicial
+vertices_corpo = np.array([
+    -0.2,  0.2, 0.0, 1.0,
+    -0.2, -0.2, 0.0, 1.0,
+     0.8,  0.0, 0.0, 1.0,
+], dtype = 'f4')
+ 
+vertices_asa_superior = np.array([
+    -0.2,  0.04, 0.0, 1.0,
+    -0.5, 0.4, 0.0, 1.0,
+     0.32, 0.09, 0.0, 1.0,
+], dtype = 'f4')
+ 
+vertices_asa_inferior = np.array([
+    -0.2, -0.04, 0.0, 1.0,
+    -0.5, -0.4, 0.0, 1.0,
+     0.32, -0.09, 0.0, 1.0,
+], dtype = 'f4')
+
+vertices_retangulo = np.array([
+        -0.5, -0.5, 0.0, 1.0,
+         0.5, -0.5, 0.0, 1.0,
+         0.5,  0.5, 0.0, 1.0,
+        -0.5,  0.5, 0.0, 1.0,
+], dtype='f4')
+
+indices_retangulo = np.array([0, 1, 2, 2, 3, 0], dtype='u4')
 
 
 """
@@ -102,20 +143,32 @@ gerenciador_asteroides.adicionar_asteroides()
 # Definindo os vertices do asteroide por meio da função curva_circulo()
 vertices_asteroide = curva_circulo()
 
-vbo_corpo = ctx.buffer(nave.vertices_corpo.tobytes())
-vbo_asa_superior = ctx.buffer(nave.vertices_asa_superior.tobytes())
-vbo_asa_inferior = ctx.buffer(nave.vertices_asa_inferior.tobytes())
+ebo_retangulo = ctx.buffer(indices_retangulo.tobytes())
+
+vbo_corpo = ctx.buffer(vertices_corpo.tobytes())
+vbo_asa_superior = ctx.buffer(vertices_asa_superior.tobytes())
+vbo_asa_inferior = ctx.buffer(vertices_asa_inferior.tobytes())
 vbo_circulo = ctx.buffer(vertices_asteroide.tobytes())
+vbo_retangulo = ctx.buffer(vertices_retangulo.tobytes())
 
 vao_corpo = ctx.vertex_array(prog, [(vbo_corpo, '4f', 'vPosition')])
 vao_asa_superior = ctx.vertex_array(prog, [(vbo_asa_superior, '4f', 'vPosition')])
 vao_asa_inferior = ctx.vertex_array(prog, [(vbo_asa_inferior, '4f', 'vPosition')])
 vao_circulo = ctx.vertex_array(prog, [(vbo_circulo, '4f', 'vPosition')])
+vao_retangulo = ctx.vertex_array(prog, [(vbo_retangulo, '4f', 'vPosition')], index_buffer=ebo_retangulo)
+
+
+# Definindo os estados do jogo
+inicio = 0
+jogo_em_andamento = 1
+jogo_pausado = 2
+
+estado_atual = inicio
 
 vsync = True
 
 def tecla(window, key, scancode, action, mods):
-    global vsync
+    global vsync, estado_atual
     
     if action != glfw.PRESS:
        return
@@ -123,12 +176,22 @@ def tecla(window, key, scancode, action, mods):
     if key == glfw.KEY_ESCAPE and action == glfw.PRESS:
         glfw.set_window_should_close(window, True)
 
-    elif key == glfw.KEY_SPACE and action == glfw.PRESS:
+    elif key == glfw.KEY_SPACE and estado_atual == jogo_em_andamento:
         nave.atirar()
         
     elif key == glfw.KEY_V:
         vsync = not vsync
         glfw.swap_interval(1 if vsync else 0)
+    
+    elif key == glfw.KEY_ENTER and estado_atual == inicio:
+        estado_atual = jogo_em_andamento
+    
+    elif key == glfw.KEY_P:
+        if estado_atual == jogo_em_andamento:
+            estado_atual = jogo_pausado
+
+        elif estado_atual == jogo_pausado:
+            estado_atual = jogo_em_andamento
 
 glfw.set_key_callback(janela, tecla)
 
@@ -141,32 +204,44 @@ while not glfw.window_should_close(janela):
     # e reduz o risco de o tiro atravessar o alvo sem toca-lo.
     dt = min(agora - instante_anterior, DT_MAXIMO)
     instante_anterior = agora
-
-    # --- atualizacao: tudo multiplicado por dt, nada por quadro ---
-    # Movimento continuo: consulta direta do estado das teclas.
-    sobe = glfw.get_key(janela, glfw.KEY_UP) == glfw.PRESS
-    desce = glfw.get_key(janela, glfw.KEY_DOWN) == glfw.PRESS
-    sentido_nave = float(sobe) - float(desce)
-    nave.atualizar_posicao(sentido_nave, dt)
     
-    gerenciador_asteroides.atualizar_asteroides(dt)
-    
-    for disparo in nave.disparos:
-        disparo.atualizar_posicao(dt)
-
     ctx.clear(*FUNDO)
-    
-    posicao_nave = nave.obter_posicao()
-    
-    for asteroide in gerenciador_asteroides.asteroides:
-        desenhar(vao_circulo, ESCALA_ASTEROIDE, asteroide.obter_posicao(), CINZA, modo=moderngl.TRIANGLE_FAN)
 
-    for disparo in nave.disparos:
-        desenhar(vao_circulo, ESCALA_DISPARO, disparo.obter_posicao(), AZUL, modo=moderngl.TRIANGLE_FAN)
-
-    desenhar(vao_corpo, ESCALA_NAVE, posicao_nave, CINZA)
-    desenhar(vao_asa_superior, ESCALA_NAVE, posicao_nave, AZUL)
-    desenhar(vao_asa_inferior, ESCALA_NAVE, posicao_nave, AZUL)
+    # Atualização das posições
+    if estado_atual == jogo_em_andamento:
+        # --- atualizacao: tudo multiplicado por dt, nada por quadro ---
+        # Movimento continuo: consulta direta do estado das teclas.
+        sobe = glfw.get_key(janela, glfw.KEY_UP) == glfw.PRESS
+        desce = glfw.get_key(janela, glfw.KEY_DOWN) == glfw.PRESS
+        sentido_nave = float(sobe) - float(desce)
+        nave.atualizar_posicao(sentido_nave, dt)
+        
+        gerenciador_asteroides.atualizar_asteroides(dt)
+        
+        for disparo in nave.disparos:
+            disparo.atualizar_posicao(dt)
+    
+    # Desenhos
+    if estado_atual == inicio:
+        desenhar(vao_corpo, ESCALA_PLAY, (0.0, 0.0), CINZA)
+    
+    elif estado_atual == jogo_em_andamento or estado_atual == jogo_pausado:
+    
+        posicao_nave = nave.obter_posicao()
+    
+        for asteroide in gerenciador_asteroides.asteroides:
+            desenhar(vao_circulo, ESCALA_ASTEROIDE, asteroide.obter_posicao(), CINZA_ASTEROIDE, modo=moderngl.TRIANGLE_FAN)
+    
+        for disparo in nave.disparos:
+            desenhar(vao_circulo, ESCALA_DISPARO, disparo.obter_posicao(), AZUL, modo=moderngl.TRIANGLE_FAN)
+    
+        desenhar(vao_corpo, ESCALA_NAVE, posicao_nave, CINZA)
+        desenhar(vao_asa_superior, ESCALA_NAVE, posicao_nave, AZUL)
+        desenhar(vao_asa_inferior, ESCALA_NAVE, posicao_nave, AZUL)
+        
+        if estado_atual == jogo_pausado:
+            desenhar(vao_retangulo, ESCALA_BARRA,(-0.05, 0.0), CINZA)
+            desenhar(vao_retangulo, ESCALA_BARRA,(0.05, 0.0), CINZA)
     
     glfw.swap_buffers(janela)
     glfw.poll_events()
@@ -182,8 +257,8 @@ while not glfw.window_should_close(janela):
         quadros, marco = 0, agora
 
 
-for recurso in (vao_corpo, vao_asa_superior, vao_asa_inferior, vao_circulo, 
-                vbo_corpo, vbo_asa_superior, vbo_asa_inferior, vbo_circulo, prog):
+for recurso in (vao_corpo, vao_asa_superior, vao_asa_inferior, vao_circulo, vao_retangulo,  
+                vbo_corpo, vbo_asa_superior, vbo_asa_inferior, vbo_circulo, vbo_retangulo, ebo_retangulo, prog):
     recurso.release()
 glfw.terminate()
 print("Execucao finalizada")
