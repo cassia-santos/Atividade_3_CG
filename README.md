@@ -11,3 +11,11 @@ Protótipos da Atividade 3 de CG
 | P | Pausa / Retoma o jogo |
 | V | Liga/Desliga o vsync |
 | Esc | Fecha a janela |
+
+## Executar
+
+Abra `Prototipos/prototipo3` no terminal e execute:
+
+```bash
+python main.py
+```
